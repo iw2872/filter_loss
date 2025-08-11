@@ -1,0 +1,71 @@
+1단계 : 설치
+# Docker 설치 스크립트 실행
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+
+sudo apt-get install 명령에 libopenblas-dev (또는 libopenblas0)를 추가
+
+# pi 유저를 docker 그룹에 추가 (sudo 없이 docker 명령 사용 위함)
+sudo usermod -aG docker iw2872
+
+# 변경사항 적용을 위해 재부팅 (선택 사항, 로그아웃 후 재로그인해도 됨)
+sudo reboot
+
+2단계 : requirements. txt 파일 준비
+pip freeze > requirements.txt
+
+3단계 : Dockerfile 파일 준비
+같은 디렉터리 (최상위)
+-------------------------------------------------------------------------------------------------------------------------------------
+# Dockerfile
+
+# ARM 아키텍처를 지원하는 Python 베이스 이미지 사용
+# 예: Python 3.9 (Bullseye 기반)
+FROM python:3.9-slim-bullseye-arm64v8 # 라즈베리파이 64비트 OS (Pi 3B+, 4 이상)
+# FROM python:3.9-slim-buster-arm32v7 # 라즈베리파이 32비트 OS (구형 Pi 또는 32비트 OS)
+# FROM python:3.10-slim-bullseye # 최신 파이썬 버전, 멀티 아키텍처 지원 (Docker 데몬이 아키텍처에 맞게 자동 선택)
+
+WORKDIR /app
+
+# 시스템에 필요한 패키지 설치 (Uvicorn의 기본 의존성에 필요한 경우가 있음)
+# 이 단계는 불필요할 수도 있지만, 오류 발생 시 추가를 고려합니다.
+RUN sudo apt-get update && sudo apt-get install -y \
+    build-essential \
+    libatlas-base-dev \
+    libopenblas-dev \
+    python3-dev \
+    gfortran \
+    libjpeg-dev \        # <--- JPEG 지원을 위해 추가
+    zlib1g-dev \         # <--- PNG/ZIP 지원을 위해 추가
+    libpng-dev \         # <--- PNG 지원을 위해 추가
+    libtiff-dev \        # <--- TIFF 지원을 위해 추가
+    liblcms2-dev \       # <--- 컬러 관리 (ICC 프로파일) 지원을 위해 추가
+    libwebp-dev \        # <--- WebP 지원을 위해 추가
+    libfreetype6-dev \   # <--- FreeType (폰트 렌더링) 지원을 위해 추가
+    && rm -rf /var/lib/apt/lists/*
+
+# requirements.txt를 먼저 복사하여 캐싱 활용 (의존성 변경 시에만 재빌드)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 애플리케이션 코드 복사
+COPY . .
+
+# Uvicorn을 사용하여 애플리케이션 실행
+# 0.0.0.0은 컨테이너 외부에서 접근 가능하게 합니다.
+# gunicorn + uvicorn worker 조합이 더 견고하고 성능이 좋지만,
+# 라즈베리파이에서는 단일 uvicorn 프로세스로도 충분한 경우가 많습니다.
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# FastAPI가 사용할 포트 노출 (문서화 목적)
+EXPOSE 8000
+-------------------------------------------------------------------------------------------------------------------------------------
+
+4단계 : Dockerfile 파일 준비
+cd /path/to/your/fastapi_project # 프로젝트 디렉토리로 이동
+docker build -t filter-loss-app:1.0 .
+
+
+5단계 : Docker 컨테이너 실행
+
+
