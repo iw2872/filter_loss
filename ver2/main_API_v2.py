@@ -6,8 +6,6 @@ import base64
 import pandas as pd
 from pathlib import Path
 from typing import List, Union
-import json
-import cmath
 import uuid
 
 from fastapi import FastAPI, HTTPException, Request, Response
@@ -24,7 +22,6 @@ from pydantic import BaseModel, Field
 # filter_insertionloss 모듈이 올바른 위치에 있는지 확인하세요.
 from filter_insertionloss import (
     calculate_insertion_loss,
-    FilterComponent,
     Inductor,
     Capacitor
 )
