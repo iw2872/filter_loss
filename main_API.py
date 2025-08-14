@@ -73,8 +73,8 @@ def load_core_names(filepath: str) -> List[str]:
         return []
 
 
-CM_CORE_NAMES = load_core_names('cm_ANB_core_db.csv')
-DM_CORE_NAMES = load_core_names('dm_CH_core_db.csv')
+CM_CORE_NAMES = load_core_names('./cm_ANB_core_db.csv')
+DM_CORE_NAMES = load_core_names('./dm_CH_core_db.csv')
 
 # 마지막 계산된 S-파라미터 데이터를 저장할 전역 변수 (CM, DM 분리)
 last_calculated_s_params_cm = None

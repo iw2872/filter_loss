@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>EMI Filter Insertion Loss Calculator</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <h1>EMI Filter Insertion Loss Calculator V.2.0</h1>
+
+    <div class="container">
+        <div class="left-panel">
+            <form id="filterForm">
+                <button type="submit" class="top-calculate-button">계산 및 그래프 보기</button>
+                <hr>
+
+                <div id="components-container">
+                    </div>
+                <button type="button" class="add-button" onclick="addComponent()">부품 추가</button><br><br>
+
+                <div style="border: 1px solid #eee; padding: 15px; border-radius: 5px; margin-top: 20px;">
+                    <h3>주파수 범위 설정 (MHz)</h3>
+                    <label for="start_freq_mhz">시작 주파수 (MHz):</label>
+                    <input type="number" step="any" id="start_freq_mhz" name="start_freq_mhz" value="0.01" min="0.001" max="1000"><br>
+                    <label for="stop_freq_mhz">종료 주파수 (MHz):</label>
+                    <input type="number" step="any" id="stop_freq_mhz" name="stop_freq_mhz" value="100" min="0.001" max="1000"><br>
+                    <label for="num_frequency_points">주파수 개수:</label> <input type="number" id="num_frequency_points" name="num_frequency_points" value="500" min="10" max="5000"><br>
+                </div>
+                <br>
+                <div style="border: 1px solid #eee; padding: 15px; border-radius: 5px; margin-top: 20px;">
+                    <h3>입출력 임피던스 설정 (Ω)</h3>
+                    <label for="zin">입력 임피던스 (Ω):</label>
+                    <input type="number" step="any" id="zin" name="zin" value="50" min="1"><br>
+                    <label for="zout">출력 임피던스 (Ω):</label>
+                    <input type="number" step="any" id="zout" name="zout" value="50" min="1"><br>
+                </div>
+                <br>
+            </form>
+        </div>
+        <div class="right-panel">
+            <div id="results">
+                </div>
+        </div>
+    </div>
+
+<script>
+    let componentCount = 0;
+    let cmCoreNames = [];
+    let dmCoreNames = [];
+
+    async function loadInitialCoreNames() {
+        try {
+            const response = await fetch('/get_core_names');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            cmCoreNames = data.cm_cores;
+            dmCoreNames = data.dm_cores;
+            console.log("CM Cores:", cmCoreNames);
+            console.log("DM Cores:", dmCoreNames);
+            // 페이지 로드 시 첫 번째 부품 폼을 추가합니다.
+            addComponent();
+        } catch (error) {
+            console.error("Failed to load core names:", error);
+            alert("코어 이름을 로드하는 데 실패했습니다. 서버 로그를 확인하세요.");
+        }
+    }
+
+    function updateCoreDropdown(index, componentType) {
+        const coreSelect = document.getElementById(`core-${index}`);
+        if (!coreSelect) return;
+
+        while (coreSelect.options.length > 1) {
+            coreSelect.remove(1);
+        }
+
+        let coresToUse = [];
+        if (componentType === 'CM_IND') {
+            coresToUse = cmCoreNames;
+        } else if (componentType === 'DM_IND') {
+            coresToUse = dmCoreNames;
+        }
+
+        coresToUse.forEach(core => {
+            const option = document.createElement('option');
+            option.value = core;
+            option.textContent = core;
+            coreSelect.appendChild(option);
+        });
+    }
+
+    function toggleComponentFields(index) {
+        const type = document.getElementById(`type-${index}`).value;
+        const inductorFields = document.getElementById(`inductor-fields-${index}`);
+        const capacitorFields = document.getElementById(`capacitor-fields-${index}`);
+
+        inductorFields.classList.add('hidden');
+        capacitorFields.classList.add('hidden');
+
+        if (type === 'CM_IND' || type === 'DM_IND') {
+            inductorFields.classList.remove('hidden');
+            updateCoreDropdown(index, type);
+        } else if (type === 'XCAP' || type === 'YCAP') {
+            capacitorFields.classList.remove('hidden');
+        }
+    }
+
+    function addComponent() {
+        const container = document.getElementById('components-container');
+        const newComponentIndex = componentCount++;
+        const newComponentHtml = `
+            <div class="component-group" id="component-${newComponentIndex}">
+                <h3>부품 ${newComponentIndex + 1}</h3>
+                <label for="type-${newComponentIndex}">부품 타입:</label>
+                <select id="type-${newComponentIndex}" name="components[${newComponentIndex}].type" onchange="toggleComponentFields(${newComponentIndex})">
+                    <option value="">선택하세요</option>
+                    <option value="CM_IND">CM 인덕터</option>
+                    <option value="DM_IND">DM 인덕터</option>
+                    <option value="XCAP">X 커패시터</option>
+                    <option value="YCAP">Y 커패시터</option>
+                </select>
+
+                <div class="inductor-fields hidden" id="inductor-fields-${newComponentIndex}">
+                    <label for="core-${newComponentIndex}">코어:</label>
+                    <select id="core-${newComponentIndex}" name="components[${newComponentIndex}].core">
+                        <option value="">코어를 선택하세요</option>
+                        </select>
+                    <label for="turns-${newComponentIndex}">권선 수:</label>
+                    <input type="number" id="turns-${newComponentIndex}" name="components[${newComponentIndex}].turns" placeholder="예: 7">
+                </div>
+
+                <div class="capacitor-fields hidden" id="capacitor-fields-${newComponentIndex}">
+                    <label for="cap_type-${newComponentIndex}">커패시터 타입:</label>
+                    <select id="cap_type-${newComponentIndex}" name="components[${newComponentIndex}].cap_type">
+                        <option value="FILM">FILM</option>
+                        <option value="CERAMIC">CERAMIC</option>
+                    </select>
+                    <label for="value_uF-${newComponentIndex}">용량 (uF):</label>
+                    <input type="number" step="any" id="value_uF-${newComponentIndex}" name="components[${newComponentIndex}].value_uF" placeholder="예: 0.1">
+                </div>
+                <button type="button" class="remove-button ${newComponentIndex === 0 ? 'hidden' : ''}" onclick="removeComponent(${newComponentIndex})">부품 제거</button>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', newComponentHtml);
+        toggleComponentFields(newComponentIndex);
+    }
+
+    function removeComponent(index) {
+        const componentToRemove = document.getElementById(`component-${index}`);
+        if (componentToRemove) {
+            componentToRemove.remove();
+        }
+    }
+
+    document.getElementById('filterForm').addEventListener('submit', async function(event) {
+        event.preventDefault();
+
+        const formData = new FormData(event.target);
+        const components = [];
+        let requestBody = {};
+
+        for (let [name, value] of formData.entries()) {
+            const compMatch = name.match(/components\[(\d+)\]\.(.+)/);
+            if (compMatch) {
+                const index = parseInt(compMatch[1]);
+                const field = compMatch[2];
+
+                if (!components[index]) {
+                    components[index] = {};
+                }
+                if (['turns', 'value_uF', 'start_freq_mhz', 'stop_freq_mhz', 'zin', 'zout', 'num_frequency_points'].includes(field) && value !== "") {
+                    components[index][field] = parseFloat(value);
+                } else if (value !== "") {
+                    components[index][field] = value;
+                }
+            } else {
+                if (['start_freq_mhz', 'stop_freq_mhz', 'zin', 'zout', 'num_frequency_points'].includes(name)) {
+                    requestBody[name] = parseFloat(value);
+                } else {
+                    requestBody[name] = value;
+                }
+            }
+        }
+
+        const validComponents = components.filter(comp => comp && comp.type);
+        requestBody.topology = validComponents;
+
+        try {
+            const response = await fetch('/calculate_loss', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                alert(`Error: ${errorData.detail || response.statusText}`);
+                return;
+            }
+
+            const result = await response.json();
+
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = `
+                <h2>계산 결과</h2>
+                <img src="data:image/png;base64,${result.cm_dm_graph_base64}" alt="CM/DM Insertion Loss Graph">
+                <div style="margin-top: 20px; text-align: center;">
+                    <a href="/download_s2p_cm" class="download-button">CM S2P 파일 다운로드</a>
+                    <a href="/download_s2p_dm" class="download-button">DM S2P 파일 다운로드</a>
+                    <a href="/download_csv_cm" class="download-button csv">CM CSV 파일 다운로드</a>
+                    <a href="/download_csv_dm" class="download-button csv">DM CSV 파일 다운로드</a>
+                </div>
+                ${result.component_details_html || ''}
+            `;
+        } catch (error) {
+            console.error('Error:', error);
+            alert('An error occurred while calculating insertion loss.');
+        }
+    });
+
+    loadInitialCoreNames();
+</script>
+</body>
+</html>

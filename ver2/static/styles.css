@@ -1,0 +1,67 @@
+/* styles.css */
+body { font-family: Arial, sans-serif; margin: 20px; }
+h1 { color: #333; }
+form { border: 1px solid #ccc; padding: 20px; border-radius: 8px; max-width: 600px; margin-bottom: 30px; }
+.component-group { border: 1px solid #eee; padding: 15px; margin-bottom: 15px; border-radius: 5px; }
+label { display: block; margin-bottom: 5px; font-weight: bold; }
+input[type="text"], input[type="number"], select {
+    width: calc(100% - 22px); padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px;
+}
+button { padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+button:hover { background-color: #0056b3; }
+#results img { max-width: 100%; height: auto; display: block; margin-top: 20px; border: 1px solid #ddd;}
+.add-button { background-color: #28a745; margin-top: 10px; }
+.add-button:hover { background-color: #218838; }
+.remove-button { background-color: #dc3545; margin-left: 10px; }
+.remove-button:hover { background-color: #c82333; }
+.hidden { display: none; }
+
+.download-button {
+    display: inline-block;
+    padding: 10px 15px;
+    margin: 5px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    text-decoration: none;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+.download-button:hover {
+    background-color: #0056b3;
+}
+.download-button.csv {
+    background-color: #28a745;
+}
+.download-button.csv:hover {
+    background-color: #218838;
+}
+
+.container {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.left-panel {
+    flex: 1;
+    min-width: 400px;
+    max-width: 600px;
+}
+
+.right-panel {
+    flex: 2;
+    min-width: 500px;
+}
+
+#results {
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+}
+.top-calculate-button {
+    margin-bottom: 20px;
+}
