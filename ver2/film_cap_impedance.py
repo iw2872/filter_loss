@@ -9,10 +9,10 @@ def estimate_film_cap_parasitics(capacitance_uF):
     C = capacitance_uF * 1e-6  # F
 
     if C <= 0.001:
-        ESR = 1.5
+        ESR = 0.7
         ESL = 7e-9
     elif C <= 0.01:
-        ESR = 0.8
+        ESR = 0.5
         ESL = 10e-9
     elif C <= 0.1:
         ESR = 0.3

@@ -7,6 +7,7 @@ import pandas as pd
 from pathlib import Path
 from typing import List, Union
 import uuid
+import math
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
@@ -264,8 +265,8 @@ async def calculate_loss_api(request: FilterTopologyRequest, req: Request):
     y_max = np.max([IL_cm_db, IL_dm_db])
 
     # 그래프의 y축을 반전된 형태로 설정 (최소값부터 0dB까지)
-    axs[0].set_ylim(y_max + 10, -5)
-    axs[1].set_ylim(y_max + 10, -5)
+    axs[0].set_ylim(math.ceil((y_max + 5)/10)*10, -5)
+    axs[1].set_ylim(math.ceil((y_max + 5)/10)*10, -5)
 
     formatter = ticker.FuncFormatter(log_formatter)
     major_locator = ticker.LogLocator(base=10.0, numticks=None)
