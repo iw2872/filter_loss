@@ -113,6 +113,9 @@ async def get_core_names_api():
     """CSV 파일에서 로드된 CM 및 DM 코어 이름 목록을 반환합니다."""
     return {"cm_cores": CM_CORE_NAMES, "dm_cores": DM_CORE_NAMES}
 
+@app.get("/history", response_class=HTMLResponse)
+async def history(request: Request):
+    return templates.TemplateResponse("history.html", {"request": request})
 
 # --- 다운로드 데이터를 생성하는 헬퍼 함수 ---
 def create_s2p_content(freq, s_params, zin, mode: str):
