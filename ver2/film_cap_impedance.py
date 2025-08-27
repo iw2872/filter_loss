@@ -6,13 +6,14 @@ def estimate_film_cap_parasitics(capacitance_uF):
     필름 커패시터의 기생 성분 추정 (X2 박스 타입 기준)
     capacitance_uF: 커패시턴스 (μF 단위)
     """
-    C = capacitance_uF * 1e-6  # F
+    #C = capacitance_uF * 1e-6  # F
+    C = capacitance_uF  # F
 
     if C <= 0.001:
-        ESR = 0.7
+        ESR = 1.5
         ESL = 7e-9
     elif C <= 0.01:
-        ESR = 0.5
+        ESR = 0.8
         ESL = 10e-9
     elif C <= 0.1:
         ESR = 0.3

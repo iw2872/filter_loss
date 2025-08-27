@@ -6,7 +6,8 @@ def estimate_ceramic_cap_parasitics(capacitance_uF):
     세라믹 커패시터의 기생 성분 추정 (예: MLCC 기준, 대략적인 값)
     capacitance_uF: 커패시턴스 (μF 단위)
     """
-    C = capacitance_uF * 1e-6  # F
+    #C = capacitance_uF * 1e-6  # uF
+    C = capacitance_uF # F
 
     if C <= 0.001:
         ESR = 0.02
