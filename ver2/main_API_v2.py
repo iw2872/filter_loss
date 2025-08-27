@@ -18,6 +18,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from pydantic import BaseModel, Field
 # 리버스 프록시 : uvicorn main_API_v2:app --host 0.0.0.0 --port 8001 --proxy-headers
+# python -m uvicorn main_API_v2:app --host 0.0.0.0 --port 8000
 
 # filter_insertionloss 모듈이 올바른 위치에 있는지 확인하세요.
 from filter_insertionloss import (
