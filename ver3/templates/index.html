@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>EMI Filter Insertion Loss Calculator</title>
+    <link rel="stylesheet" href="./static/styles.css">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <h1 style="display: inline;">EMI Filter Insertion Loss Simulation V.2.3 (2025. 08. 29)</h1>
+    <a href="./history" style="margin-left: 20px;">History</a>
+    <div class="container">
+        <div class="left-panel">
+            <form id="filterForm">
+                <button type="submit" class="top-calculate-button">계산 및 그래프 보기</button>
+                <hr>
+
+                <div id="components-container">
+                </div>
+                <button type="button" class="add-button" onclick="addComponent()">부품 추가</button><br><br>
+
+                <div style="border: 1px solid #eee; padding: 15px; border-radius: 5px; margin-top: 20px;">
+                    <h3>주파수 범위 설정 (MHz)</h3>
+                    <label for="start_freq_mhz">시작 주파수 (MHz):</label>
+                    <input type="number" step="any" id="start_freq_mhz" name="start_freq_mhz" value="0.01" min="0.001" max="1000"><br>
+                    <label for="stop_freq_mhz">종료 주파수 (MHz):</label>
+                    <input type="number" step="any" id="stop_freq_mhz" name="stop_freq_mhz" value="100" min="0.001" max="1000"><br>
+                    <label for="num_frequency_points">주파수 개수:</label> <input type="number" id="num_frequency_points" name="num_frequency_points" value="500" min="10" max="5000"><br>
+                </div>
+                <br>
+                <div style="border: 1px solid #eee; padding: 15px; border-radius: 5px; margin-top: 20px;">
+                    <h3>입출력 임피던스 설정 (Ω)</h3>
+                    <label for="zin">입력 임피던스 (Ω):</label>
+                    <input type="number" step="any" id="zin" name="zin" value="50" min="1"><br>
+                    <label for="zout">출력 임피던스 (Ω):</label>
+                    <input type="number" step="any" id="zout" name="zout" value="50" min="1"><br>
+                </div>
+                <br>
+                <div style="border: 1px solid #eee; padding: 15px; border-radius: 5px; margin-top: 20px;">
+                    <h3>Y축 범위 설정 (dB)</h3>
+                    <label for="y_min_db">Y축 최소값 (dB):</label>
+                    <input type="number" step="any" id="y_min_db" name="y_min_db" placeholder="자동"><br>
+                    <label for="y_max_db">Y축 최대값 (dB):</label>
+                    <input type="number" step="any" id="y_max_db" name="y_max_db" placeholder="자동"><br>
+                </div>
+                <br>
+            </form>
+        </div>
+        <div class="right-panel">
+            <div id="results">
+            </div>
+        </div>
+    </div>
+
+<script>
+    let componentCount = 0;
+    let cmCoreNames = [];
+    let dmCoreNames = [];
+
+    async function loadInitialCoreNames() {
+        try {
+            const response = await fetch('./get_core_names');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            cmCoreNames = data.cm_cores;
+            dmCoreNames = data.dm_cores;
+            console.log("CM Cores:", cmCoreNames);
+            console.log("DM Cores:", dmCoreNames);
+            // 페이지 로드 시 첫 번째 부품 폼을 추가합니다.
+            addComponent();
+        } catch (error) {
+            console.error("Failed to load core names:", error);
+            alert("코어 이름을 로드하는 데 실패했습니다. 서버 로그를 확인하세요.");
+        }
+    }
+
+    function updateCoreDropdown(index, componentType) {
+        const coreSelect = document.getElementById(`core-${index}`);
+        if (!coreSelect) return;
+
+        while (coreSelect.options.length > 1) {
+            coreSelect.remove(1);
+        }
+
+        let coresToUse = [];
+        if (componentType === 'CM_IND') {
+            coresToUse = cmCoreNames;
+        } else if (componentType === 'DM_IND') {
+            coresToUse = dmCoreNames;
+        }
+
+        coresToUse.forEach(core => {
+            const option = document.createElement('option');
+            option.value = core;
+            option.textContent = core;
+            coreSelect.appendChild(option);
+        });
+    }
+
+    function toggleComponentFields(index) {
+        const type = document.getElementById(`type-${index}`).value;
+        const inductorFields = document.getElementById(`inductor-fields-${index}`);
+        const capacitorFields = document.getElementById(`capacitor-fields-${index}`);
+
+        inductorFields.classList.add('hidden');
+        capacitorFields.classList.add('hidden');
+
+        if (type === 'CM_IND' || type === 'DM_IND') {
+            inductorFields.classList.remove('hidden');
+            updateCoreDropdown(index, type);
+        } else if (type === 'XCAP' || type === 'YCAP') {
+            capacitorFields.classList.remove('hidden');
+        }
+    }
+
+    function addComponent() {
+        const container = document.getElementById('components-container');
+        const newComponentIndex = componentCount++;
+        const newComponentHtml = `
+            <div class="component-group" id="component-${newComponentIndex}">
+                <h3>부품 ${newComponentIndex + 1}</h3>
+                <label for="type-${newComponentIndex}">부품 타입:</label>
+                <select id="type-${newComponentIndex}" name="components[${newComponentIndex}].type" onchange="toggleComponentFields(${newComponentIndex})">
+                    <option value="">선택하세요</option>
+                    <option value="CM_IND">CM 인덕터</option>
+                    <option value="DM_IND">DM 인덕터</option>
+                    <option value="XCAP">X 커패시터</option>
+                    <option value="YCAP">Y 커패시터</option>
+                </select>
+
+                <div class="inductor-fields hidden" id="inductor-fields-${newComponentIndex}">
+                    <label for="core-${newComponentIndex}">코어:</label>
+                    <select id="core-${newComponentIndex}" name="components[${newComponentIndex}].core">
+                        <option value="">코어를 선택하세요</option>
+                    </select>
+                    <label for="turns-${newComponentIndex}">권선 수:</label>
+                    <input type="number" id="turns-${newComponentIndex}" name="components[${newComponentIndex}].turns" placeholder="예: 7">
+                </div>
+
+                <div class="capacitor-fields hidden" id="capacitor-fields-${newComponentIndex}">
+                    <label for="cap_type-${newComponentIndex}">커패시터 타입:</label>
+                    <select id="cap_type-${newComponentIndex}" name="components[${newComponentIndex}].cap_type">
+                        <option value="FILM">FILM</option>
+                        <option value="CERAMIC">CERAMIC</option>
+                    </select>
+                    <label for="value_uF-${newComponentIndex}">용량 (uF):</label>
+                    <input type="number" step="any" id="value_uF-${newComponentIndex}" name="components[${newComponentIndex}].value_uF" placeholder="예: 0.1">
+                </div>
+                <button type="button" class="remove-button ${newComponentIndex === 0 ? 'hidden' : ''}" onclick="removeComponent(${newComponentIndex})">부품 제거</button>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', newComponentHtml);
+        toggleComponentFields(newComponentIndex);
+    }
+
+    function removeComponent(index) {
+        const componentToRemove = document.getElementById(`component-${index}`);
+        if (componentToRemove) {
+            componentToRemove.remove();
+        }
+    }
+
+    document.getElementById('filterForm').addEventListener('submit', async function(event) {
+        event.preventDefault();
+
+        const formData = new FormData(event.target);
+        const components = [];
+        let requestBody = {};
+
+        // Y축 입력값 읽기
+        const yMinDbValue = document.getElementById('y_min_db').value;
+        const yMaxDbValue = document.getElementById('y_max_db').value;
+        requestBody.y_min_db = yMinDbValue !== '' ? parseFloat(yMinDbValue) : null;
+        requestBody.y_max_db = yMaxDbValue !== '' ? parseFloat(yMaxDbValue) : null;
+
+        for (let [name, value] of formData.entries()) {
+            const compMatch = name.match(/components\[(\d+)\]\.(.+)/);
+            if (compMatch) {
+                const index = parseInt(compMatch[1]);
+                const field = compMatch[2];
+
+                if (!components[index]) {
+                    components[index] = {};
+                }
+                if (['turns', 'value_uF'].includes(field)) {
+                    components[index][field] = parseFloat(value);
+                } else if (value !== "") {
+                    components[index][field] = value;
+                }
+            } else {
+                if (['start_freq_mhz', 'stop_freq_mhz', 'zin', 'zout', 'num_frequency_points'].includes(name)) {
+                    requestBody[name] = parseFloat(value);
+                }
+            }
+        }
+
+        const validComponents = components.filter(comp => comp && comp.type);
+        requestBody.topology = validComponents;
+
+        const resultsDiv = document.getElementById('results');
+        resultsDiv.innerHTML = '';
+
+        try {
+            const response = await fetch('./calculate_loss', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                const errorMessage = result.detail || '알 수 없는 서버 오류가 발생했습니다.';
+                resultsDiv.innerHTML = `<p style="color:red;">오류 발생: ${errorMessage}</p>`;
+                alert(`오류 발생: ${errorMessage}`);
+                return;
+            }
+
+            const resultsContent = document.createElement('div');
+            resultsContent.innerHTML = `
+                <div id="plotly-graph-container" style="width:100%; height:600px;"></div>
+                <div style="margin-top: 20px; text-align: center;">
+                    <a href="./download_s2p_cm" class="download-button">CM S2P 파일 다운로드</a>
+                    <a href="./download_s2p_dm" class="download-button">DM S2P 파일 다운로드</a>
+                    <a href="./download_csv_cm" class="download-button csv">CM CSV 파일 다운로드</a>
+                    <a href="./download_csv_dm" class="download-button csv">DM CSV 파일 다운로드</a>
+                </div>
+                ${result.component_details_html || ''}
+            `;
+
+            resultsDiv.appendChild(resultsContent);
+
+            const graphContainer = document.getElementById('plotly-graph-container');
+            if (result.plotly_data && result.plotly_layout && graphContainer) {
+                Plotly.newPlot(graphContainer, result.plotly_data, result.plotly_layout);
+            } else {
+                resultsDiv.innerHTML = `<p style="color:red;">그래프 데이터를 불러오는 데 실패했습니다.</p>`;
+                alert('그래프 데이터를 불러오는 데 실패했습니다.');
+            }
+
+        } catch (error) {
+            console.error('Error:', error);
+            resultsDiv.innerHTML = `<p style="color:red;">계산 중 네트워크 오류가 발생했습니다.</p>`;
+            alert('계산 중 네트워크 오류가 발생했습니다.');
+        }
+    });
+
+    loadInitialCoreNames();
+</script>
+</body>
+</html>

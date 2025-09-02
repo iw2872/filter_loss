@@ -1,0 +1,230 @@
+#!/usr/bin/env python3
+"""
+cm_dm_to_s4p_ideal.py
+
+ - Ideal S4P Converter with Plotting.
+ - This script reads ideal cm.s2p and dm.s2p files,
+ - combines them into a single, ideal combined.s4p file,
+ - and then reads the combined file to plot Sdd21 and Scc21.
+ - It assumes perfect mode separation (no mode conversion).
+"""
+
+import numpy as np
+import re
+from math import sqrt
+import matplotlib.pyplot as plt
+
+# 🔹 Specify your filenames here
+dm_file = "dm.s2p"
+cm_file = "cm.s2p"
+out_file = "combined.s4p"
+
+
+def read_touchstone_2p(filename):
+    """
+    Reads a 2-port Touchstone (.s2p) file and returns frequencies, S-parameters, and reference impedance.
+    """
+    freqs = []
+    S_list = []
+    z0 = 50.0
+    fmt = 'RI'
+    with open(filename, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('!'):
+                continue
+            if line.startswith('#'):
+                parts = line[1:].strip().upper().split()
+                if 'RI' in parts:
+                    fmt = 'RI'
+                elif 'MA' in parts:
+                    fmt = 'MA'
+                elif 'DB' in parts:
+                    fmt = 'DB'
+                if 'R' in parts:
+                    try:
+                        r_index = parts.index('R')
+                        z0 = float(parts[r_index + 1])
+                    except Exception:
+                        pass
+                continue
+            toks = re.split(r'\s+', line)
+            if len(toks) < 9:
+                rest = ''
+                while len(toks) < 9:
+                    nxt = f.readline()
+                    if not nxt: break
+                    nxt = nxt.strip()
+                    if not nxt or nxt.startswith('!'): continue
+                    rest += ' ' + nxt
+                    toks = re.split(r'\s+', (line + ' ' + rest).strip())
+            if len(toks) < 9:
+                raise ValueError(f"Can't parse line in {filename}: {line}")
+            freq = float(toks[0])
+            nums = [float(x) for x in toks[1:9]]
+
+            def pair_to_complex(a, b, fmt):
+                if fmt == 'RI':
+                    return complex(a, b)
+                elif fmt == 'MA':
+                    mag = a
+                    ang = np.deg2rad(b)
+                    return mag * (np.cos(ang) + 1j * np.sin(ang))
+                elif fmt == 'DB':
+                    mag = 10 ** (a / 20.0)
+                    ang = np.deg2rad(b)
+                    return mag * (np.cos(ang) + 1j * np.sin(ang))
+                else:
+                    raise ValueError("Unknown format")
+
+            S11 = pair_to_complex(nums[0], nums[1], fmt)
+            S21 = pair_to_complex(nums[2], nums[3], fmt)
+            S12 = pair_to_complex(nums[4], nums[5], fmt)
+            S22 = pair_to_complex(nums[6], nums[7], fmt)
+            S = np.array([[S11, S12],
+                          [S21, S22]], dtype=complex)
+            freqs.append(freq)
+            S_list.append(S)
+    return np.array(freqs), S_list, z0, fmt
+
+
+def read_touchstone_4p(filename):
+    """
+    Reads a 4-port Touchstone (.s4p) file and returns frequencies, S-parameters, and reference impedance.
+    """
+    freqs = []
+    S_list = []
+    z0 = 50.0
+    with open(filename, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('!'):
+                continue
+            if line.startswith('#'):
+                parts = line[1:].strip().upper().split()
+                if 'RI' in parts:
+                    pass
+                if 'R' in parts:
+                    try:
+                        r_index = parts.index('R')
+                        z0 = float(parts[r_index + 1])
+                    except Exception:
+                        pass
+                continue
+            toks = re.split(r'\s+', line)
+            if len(toks) < 33:
+                rest = ''
+                while len(toks) < 33:
+                    nxt = f.readline()
+                    if not nxt: break
+                    nxt = nxt.strip()
+                    if not nxt or nxt.startswith('!'): continue
+                    rest += ' ' + nxt
+                    toks = re.split(r'\s+', (line + ' ' + rest).strip())
+            if len(toks) < 33:
+                raise ValueError(f"Can't parse line in {filename}: {line}")
+            freq = float(toks[0])
+            nums = [float(x) for x in toks[1:]]
+
+            S = np.zeros((4, 4), dtype=complex)
+            for r in range(4):
+                for c in range(4):
+                    idx = (r * 4 + c) * 2
+                    S[r, c] = complex(nums[idx], nums[idx + 1])
+            freqs.append(freq)
+            S_list.append(S)
+    return np.array(freqs), S_list, z0
+
+
+def write_touchstone_4p(filename, freqs, S4_list, z0):
+    """
+    Writes 4-port S-parameters to a Touchstone (.s4p) file.
+    """
+    with open(filename, 'w') as f:
+        f.write("! Generated by cm_dm_to_s4p_ideal.py\n")
+        f.write(f"# Hz S RI R {z0}\n")
+        for i, freq in enumerate(freqs):
+            S4 = S4_list[i]
+            nums = []
+            for r in range(4):
+                for c in range(4):
+                    val = S4[r, c]
+                    nums.append(f"{val.real:.12e}")
+                    nums.append(f"{val.imag:.12e}")
+            line = f"{freq:.6e} " + " ".join(nums) + "\n"
+            f.write(line)
+
+
+def main():
+    """
+    Main function to read DM/CM files, combine them into an ideal S4P, and plot the result.
+    """
+    try:
+        # 1. Load original data from DM and CM files
+        freqs_dm, Sdm_list, z0_dm, _ = read_touchstone_2p(dm_file)
+        freqs_cm, Scm_list, z0_cm, _ = read_touchstone_2p(cm_file)
+
+        if not np.allclose(freqs_dm, freqs_cm):
+            raise ValueError("Frequency points in DM and CM files do not match.")
+
+        freqs = freqs_dm
+        z0 = z0_dm
+
+        # 2. Define transformation matrix for mixed-mode to single-ended conversion
+        s = 1.0 / sqrt(2.0)
+        T = s * np.array([
+            [1, 0, 1, 0],
+            [1, 0, -1, 0],
+            [0, 1, 0, 1],
+            [0, 1, 0, -1],
+        ], dtype=complex)
+        Tinv = np.linalg.inv(T)
+
+        # 3. Create the ideal single-ended S-parameter matrix (S4_list)
+        S4_list = []
+        for Sdm, Scm in zip(Sdm_list, Scm_list):
+            # Create an ideal mixed-mode matrix with no mode conversion
+            S_mm = np.zeros((4, 4), dtype=complex)
+            S_mm[0:2, 0:2] = Sdm
+            S_mm[2:4, 2:4] = Scm
+
+            # Convert the ideal mixed-mode matrix to a single-ended matrix
+            S_se = T @ S_mm @ Tinv
+            S4_list.append(S_se)
+
+        # 4. Save the combined.s4p file
+        write_touchstone_4p(out_file, freqs, S4_list, z0)
+        print(f"✅ Ideal {out_file} created successfully ({len(freqs)} points, z0={z0})")
+
+        # 5. Read the generated combined.s4p file and extract S-parameters
+        freqs_s4p, S_se_list_from_file, z0_s4p = read_touchstone_4p(out_file)
+
+        # 6. Convert the single-ended data back to mixed-mode for plotting
+        S21_dd = []
+        S21_cc = []
+        for S_se in S_se_list_from_file:
+            S_mm = Tinv @ S_se @ T
+            S21_dd.append(S_mm[1, 0])  # Sdd21
+            S21_cc.append(S_mm[3, 2])  # Scc21
+
+        S21_dd = np.array(S21_dd)
+        S21_cc = np.array(S21_cc)
+
+        # 7. Plot the results
+        plt.figure()
+        plt.plot(freqs, 20 * np.log10(np.abs(S21_dd)), label='Sdd21 (Differential-mode)')
+        plt.plot(freqs, 20 * np.log10(np.abs(S21_cc)), label='Scc21 (Common-mode)')
+        plt.title('Ideal S21 Parameters from Combined S4P')
+        plt.xlabel('Frequency (Hz)')
+        plt.ylabel('Magnitude (dB)')
+        plt.xscale('log')
+        plt.grid(True)
+        plt.legend()
+        plt.show()
+
+    except Exception as e:
+        print(f"❌ An error occurred: {e}")
+
+
+if __name__ == "__main__":
+    main()
